@@ -9,12 +9,13 @@ error FundMe__NotOwner();
 contract FundMe {
     using PriceConverter for uint256;
 
-    uint256 public constant MINIMUM_USD = 5 * 1e18;
+    uint256 private constant MINIMUM_USD = 5 * 1e18;
 
     AggregatorV3Interface private immutable s_priceFeed;
-    address public immutable i_owner;
-    address[] public s_funders;
-    mapping(address => uint256) s_funderToAmount;
+    address private immutable i_owner;
+    address[] private s_funders;
+    uint256 private s_amountRaised;
+    mapping(address => uint256) private s_funderToAmount;
 
     constructor(address priceFeedAddress) {
         i_owner = msg.sender;
@@ -28,17 +29,18 @@ contract FundMe {
         );
         s_funders.push(msg.sender);
         s_funderToAmount[msg.sender] += msg.value;
+        s_amountRaised += msg.value;
     }
 
     function withdraw() public onlyOwner {
-        for (uint256 i = 0; i < s_funders.length; i++) {
+        uint256 fundersLength = s_funders.length;
+        for (uint256 i = 0; i < fundersLength; i++) {
             s_funderToAmount[s_funders[i]] = 0;
         }
         s_funders = new address[](0);
+        s_amountRaised = 0;
 
-        (bool success, ) = payable(msg.sender).call{
-            value: address(this).balance
-        }("");
+        (bool success, ) = i_owner.call{value: address(this).balance}("");
         require(success, "Withdrawal failed.");
     }
 
@@ -57,5 +59,23 @@ contract FundMe {
 
     fallback() external payable {
         fund();
+    }
+
+    function getMinimumUsd() public pure returns (uint256) {
+        return MINIMUM_USD;
+    }
+
+    function getOwner() public view returns (address) {
+        return i_owner;
+    }
+
+    function getFunder(uint256 index) public view returns (address) {
+        return s_funders[index];
+    }
+
+    function getAmountFunded(
+        address funderAddress
+    ) public view returns (uint256) {
+        return s_funderToAmount[funderAddress];
     }
 }
